@@ -1,0 +1,32 @@
+LookUp Routine:
+	- get person from tier x
+	- get all ranked matches from person x in season y
+	- for each match get each participants info (kills, deaths, assists, ...)
+	- for each participant get their tier and division
+
+Stats
+	---- Kills
+	---- Doubles
+	---- Triples
+	---- Quadras
+	---- Pentas
+	---- Deaths
+	---- Assists
+	---- Damage to Champs
+	---- Damage Taken
+	---- CS: minions + neutral minions
+	---- gold earned
+	---- wards bought
+	---- wards placed
+	---- wards killed
+	---- cc time dealt
+
+People used for lookup
+	- reymargera 29802427
+	- excal eros 37090872
+	- 1rritating 21104865
+	- NA Reksai  39894624
+
+
+
+		40835255	2051286940	NA	1215	PRESEASON2016	MASTER	I	BOTTOM	DUO	429	Kalista	2	7	6	87	6086	0	0	0	0	1	7	0	8551	12210	143	2016-01-02 15:58:05	2016-01-02 23:58:05
