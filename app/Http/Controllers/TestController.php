@@ -20,7 +20,7 @@ class TestController extends Controller
      */
 	public function get() {
 
-    	$api = new Api('b38ffe8a-b2c7-4272-a3d2-fb0c798823c0');
+    	$api = new Api();
     	$api->setRegion('na');
     	//return View:make('index');
     	$matchlistApi = $api->matchlist();
