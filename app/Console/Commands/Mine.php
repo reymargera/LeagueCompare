@@ -130,11 +130,24 @@ class Mine extends Command
 					echo "Duplicate Entry Not Added";
 				}	
 			}
+			$leagueApi = $api->league();
+			$userLeagueData = (array) $leagueApi->league($summonersInMatch, true);
+			for($k = 0; $k < count($summonersInMatch); k++) {
+				//Check to see if user has a rank else delete row
+				if(isset($userLeagueData[$summonersInMatch[$k]])) {
+					$division = $userLeagueData[$summonersInMatch[$k]][0]->entries[0]->division;
+					$tier = $userLeagueData[$summonersInMatch[$k]][0]->tier;
 
-
-
-
-
+					gamestat::where('matchId', $matchId)
+						->where('sumonerId', $summonersInMatch[$k])
+						->update(['tier' => $tier, 'division' => $division]);
+				}
+				else {
+					gamestat::where('matchId', $matchId)
+						->where('summonerId', $summonersInMatch[$k])
+						->delete();
+				}
+			}
 		}
 	}	
     }
