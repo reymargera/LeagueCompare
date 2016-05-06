@@ -51,10 +51,11 @@ class Mine extends Command
 	
 	$matchlistApi = $api->matchlist();
 	$summonerQueue = new SplQueue();
+	$summonerQueue->enqueue(29802427);
 	
 	while(!$summonerQueue->isEmpty()) {
 		//TODO: check season name and queue type
-		$matchlist = $matchlistApi->matchlist($summonerQueue->dequeue(), "RANKED_SOLO_5x5", "SEASON2016");
+		$matchlist = $matchlistApi->matchlist($summonerQueue->dequeue(), "TEAM_BUILDER_DRAFT_RANKED_5x5", "SEASON2016");
 		$staticData = $api->staticData();
 		
 		//Iterating through each match found for the dequeued user
@@ -84,7 +85,11 @@ class Mine extends Command
 				
 				$summonerId = $participantIdentity->player['summonerId'];
 				array_push($summonersInMatch, $summonerId);
-		
+
+
+				if(!in_array($summonerId, iterator_to_array($summonerQueue)))
+					$summonerQueue->enqueue($summonerId);			
+	
 				$lane = $participantTimeline->lane;
 				$role = $participantTimeline->role;
 				$kills = $participantStats->kills;
@@ -141,6 +146,7 @@ class Mine extends Command
 					gamestat::where('matchId', $matchId)
 						->where('sumonerId', $summonersInMatch[$k])
 						->update(['tier' => $tier, 'division' => $division]);
+					echo "Successfully Added: " . $matchId . " " . $summonersInMatch[$k];
 				}
 				else {
 					gamestat::where('matchId', $matchId)
