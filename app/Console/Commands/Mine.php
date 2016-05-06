@@ -11,6 +11,8 @@ use App\gamestat;
 
 use LeagueWrap\Api;
 
+use SplQueue;
+
 class Mine extends Command
 {
     /**
@@ -44,8 +46,9 @@ class Mine extends Command
      */
     public function handle()
     {
-	$api = new Api(env('LEAGUE_API_KEY'));
-	
+	$api = new Api(env('API_KEY'));
+		
+	echo "Creating League API Object\n";
 	//TODO: make seperate commands to mine other servers
 	$api->setRegion('na');
 	
@@ -53,19 +56,29 @@ class Mine extends Command
 	$summonerQueue = new SplQueue();
 	$summonerQueue->enqueue(29802427);
 	
+	echo "Iterating Through Summoner Queue\n";
+	
 	while(!$summonerQueue->isEmpty()) {
+		echo "Current Queue Size: " . $summonerQueue->count() . "\n";
+		
+		$currentSummoner = $summonerQueue->dequeue();
+		echo "Geting MatchList Data For Summoner: " . $currentSummoner . "\n";
+
 		//TODO: check season name and queue type
-		$matchlist = $matchlistApi->matchlist($summonerQueue->dequeue(), "TEAM_BUILDER_DRAFT_RANKED_5x5", "SEASON2016");
+		$matchList = $matchlistApi->matchlist($currentSummoner, "TEAM_BUILDER_DRAFT_RANKED_5x5", "SEASON2016");
 		$staticData = $api->staticData();
 		
+		echo "Iterating Through Matches (" . count($matchList) .  ") For Summoner: " . $currentSummoner . "\n";
 		//Iterating through each match found for the dequeued user
-		for($i = 0; $i < count($matchlist); $i++) {
+		for($i = 0; $i < count($matchList); $i++) {
 			
 			//Saving matchId for current match to later retrive stats
-			$matchId = $matchList->($i)->matchId;
+			$matchId = $matchList->match($i)->matchId;
 			
 			//Used to limit number of api requests we send	
 			usleep(2000000);
+			
+			echo "Retrieving Match: " . $matchId . "\n";
 
 			//Geting match stats 
 			$matchApi = $api->match();
@@ -76,40 +89,45 @@ class Mine extends Command
 			$season = $match->season;
 
 			$summonersInMatch = array();
+
 			for($j = 1; $j <= count($match->participants); $j++) {
-				$participantStats = $match->participants[$j->stats;
-				$participantTimeline = $match->participants[$j]->timline;
+				echo "Retrieving Stats For Participant " . $j . " In Match: " . $matchId . "\n";
+					
+				$participantStats = $match->participants[$j]->stats;
+				$participantTimeline = $match->participants[$j]->timeline;
 				$participantIdentity = $match->participantIdentities[$j];
-				$champId = $match->participants[$j]->championId;
-				$championName = $staticData->getChampions()->data[$champId]->key;
+				$championId = $match->participants[$j]->championId;
+				$championName = $staticData->getChampions()->data[$championId]->key;
 				
 				$summonerId = $participantIdentity->player['summonerId'];
 				array_push($summonersInMatch, $summonerId);
 
-
+				
 				if(!in_array($summonerId, iterator_to_array($summonerQueue)))
 					$summonerQueue->enqueue($summonerId);			
-	
+				
 				$lane = $participantTimeline->lane;
 				$role = $participantTimeline->role;
 				$kills = $participantStats->kills;
 				$deaths = $participantStats->deaths;
-				$assists = $participants->assists;
+				$assists = $participantStats->assists;
 				$minionsKilled = $participantStats->minionsKilled;
-				$neutralMinionsKilled - $participantStats->neutralMinionsKilled;
+				$neutralMinionsKilled = $participantStats->neutralMinionsKilled;
 				$creepScore = $minionsKilled + $neutralMinionsKilled;
 				$goldEarned = $participantStats->goldEarned;
 				$doubleKills = $participantStats->doubleKills;
-				$tripleKills = $paticipantStats->tripleKills;
+				$tripleKills = $participantStats->tripleKills;
 				$quadraKills = $participantStats->quadraKills;
 				$pentaKills = $participantStats->pentaKills;
-				$visionsWardsBoughtInGame = $participantStats->visionWardsBoughtInGame;
+				$visionWardsBoughtInGame = $participantStats->visionWardsBoughtInGame;
 				$wardsPlaced = $participantStats->wardsPlaced;
 				$wardsKilled = $participantStats->wardsKilled;
 				$totalDamageDealtToChampions = $participantStats->totalDamageDealtToChampions;
 				$totalDamageTaken = $participantStats->totalDamageTaken;
 				$totalTimeCrowdControlDealt = $participantStats->totalTimeCrowdControlDealt;
 	
+				echo "Attempting To Save New Record\n";				
+
 				//Try to add row into database, if already in db then dont add
 				try {
 					$gamestat = gamestat::create(['summonerId' => $summonerId,
@@ -131,24 +149,30 @@ class Mine extends Command
 								      'damageDealt' => $totalDamageDealtToChampions,
 								      'damageTaken' => $totalDamageTaken,
 								      'crowdControlTimeDealt' => $totalTimeCrowdControlDealt]);
+				
+				echo "Entry Saved For Summoner: " . $summonerId . " In Match: " . $matchId . "\n";
 				} catch (\Illuminate\Database\QueryException $e) {
-					echo "Duplicate Entry Not Added";
+					echo "Duplicate Entry Not Added \n";
 				}	
 			}
+			echo "Retrieving User Rank Information\n";
+			
 			$leagueApi = $api->league();
 			$userLeagueData = (array) $leagueApi->league($summonersInMatch, true);
-			for($k = 0; $k < count($summonersInMatch); k++) {
+			for($k = 0; $k < count($summonersInMatch); $k++) {
 				//Check to see if user has a rank else delete row
 				if(isset($userLeagueData[$summonersInMatch[$k]])) {
 					$division = $userLeagueData[$summonersInMatch[$k]][0]->entries[0]->division;
 					$tier = $userLeagueData[$summonersInMatch[$k]][0]->tier;
 
 					gamestat::where('matchId', $matchId)
-						->where('sumonerId', $summonersInMatch[$k])
+						->where('summonerId', $summonersInMatch[$k])
 						->update(['tier' => $tier, 'division' => $division]);
-					echo "Successfully Added: " . $matchId . " " . $summonersInMatch[$k];
+					echo "Successfully Added Rank Info For: " . $summonersInMatch[$k] . "\n";
 				}
 				else {
+					echo "Rank Info For: " . $summonersInMatch[$k] . " Was Not Found, Deleting Record\n";					
+
 					gamestat::where('matchId', $matchId)
 						->where('summonerId', $summonersInMatch[$k])
 						->delete();
