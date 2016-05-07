@@ -150,6 +150,9 @@ class Mine extends Command
 				if(!in_array($summonerId, iterator_to_array($summonerQueue)))
 					$summonerQueue->enqueue($summonerId);			
 				
+				//Getting Mastery Information From Summoner
+								
+
 				$lane = $participantTimeline->lane;
 				$role = $participantTimeline->role;
 				$kills = $participantStats->kills;
