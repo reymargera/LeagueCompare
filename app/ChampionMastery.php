@@ -8,5 +8,5 @@ class ChampionMastery extends Model
 {
     protected $table = 'championMastery';
 
-    protected $fillable = ['championId', 'championName', 'totalMastery', 'totalLevel', 'totalChests'];
+    protected $fillable = ['championId', 'championName', 'totalMastery', 'totalLevel', 'totalChests', 'count'];
 }

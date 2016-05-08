@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Http\Requests;
 use App\SummonerProfile;
 use App\gamestat;
+use App\ChampionMastery;
 
 use LeagueWrap\Api;
 
@@ -38,7 +39,27 @@ class Mine extends Command
     {
         parent::__construct();
     }
-    
+   
+    private function updateChampionMasteryTable($masteryList)
+    {
+	foreach($masteryList as $masteryInfo) {
+		$championId = $masteryInfo->championId;
+		$championPoints = $masteryInfo->championPoints;
+		$championLevel = $masteryInfo->championLevel;
+		$chestGranted = $masteryInfo->chestGranted;
+		
+		$chestCount = 0;
+		if($chestGranted)
+			$chestCount = 1;
+		
+		$currentRow = ChampionMastery::find($championId);
+		$currentRow->increment('totalMastery', $championPoints);
+		$currentRow->increment('totalLevel', $championLevel);
+		$currentRow->increment('totalChests', $chestCount);
+		$currentRow->increment('count', 1);								
+	}
+    } 
+
     /**
     * Converts errors into exceptions so that they can be caught
     */
@@ -142,6 +163,7 @@ class Mine extends Command
 				$participantIdentity = $match->participantIdentities[$j];
 				$championId = $match->participants[$j]->championId;
 				$championName = $staticData->getChampions()->data[$championId]->key;
+				$championMasteryApi = $api->championMastery();
 				
 				$summonerId = $participantIdentity->player['summonerId'];
 				array_push($summonersInMatch, $summonerId);
@@ -150,9 +172,26 @@ class Mine extends Command
 				if(!in_array($summonerId, iterator_to_array($summonerQueue)))
 					$summonerQueue->enqueue($summonerId);			
 				
-				//Getting Mastery Information From Summoner
-								
+				$masteryList = null;
 
+				//Getting Mastery Information From Summoner
+				do {
+					try {
+						$masteryList = $championMasteryApi->champions($summonerId);
+					} catch(\Exception $e) {
+						echo "Encountered Error Getting Mastery Info, Trying Again In 10 sec\n";					
+						sleep(10);
+						$attempts++;
+						continue;
+					}
+
+					$attempts = 0;
+					break;
+
+				} while($attempts < $MAX_ATTEMPTS);								
+			
+				updateChampionMasteryTable($masteryList);	
+					
 				$lane = $participantTimeline->lane;
 				$role = $participantTimeline->role;
 				$kills = $participantStats->kills;
