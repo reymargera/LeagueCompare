@@ -9,10 +9,12 @@ use App\Http\Requests;
 use App\SummonerProfile;
 use App\gamestat;
 use App\ChampionMastery;
+use App\UsedSummoners;
 
 use LeagueWrap\Api;
 
 use SplQueue;
+use ErrorException;
 
 class Mine extends Command
 {
@@ -21,7 +23,7 @@ class Mine extends Command
      *
      * @var string
      */
-    protected $signature = 'mine';
+    protected $signature = 'mine {summonerId}';
 
     /**
      * The console command description.
@@ -52,7 +54,7 @@ class Mine extends Command
 		if($chestGranted)
 			$chestCount = 1;
 		
-		$currentRow = ChampionMastery::find($championId);
+		$currentRow = ChampionMastery::where('championId', $championId);
 		$currentRow->increment('totalMastery', $championPoints);
 		$currentRow->increment('totalLevel', $championLevel);
 		$currentRow->increment('totalChests', $chestCount);
@@ -80,6 +82,8 @@ class Mine extends Command
 	//Holds maximum allowed attempts for a valid API response before quitting
 	$MAX_ATTEMPTS = 5;
 	$attempts = 0;
+	$waitTime = 350000;
+	$startingUser = $this->argument('summonerId');
 	
 	$api = new Api(env('API_KEY'));
 		
@@ -89,7 +93,7 @@ class Mine extends Command
 	
 	$matchlistApi = $api->matchlist();
 	$summonerQueue = new SplQueue();
-	$summonerQueue->enqueue(29802427);	
+	$summonerQueue->enqueue($startingUser);	
 	echo "Iterating Through Summoner Queue\n";
 	
 	while(!$summonerQueue->isEmpty()) {
@@ -107,12 +111,12 @@ class Mine extends Command
 				$staticData = $api->staticData();
 			} catch (\Exception $e) {
 				//Wait for API to get back up or rate limit to reset
-				echo "Error Encountered Getting Summoners Match History, Trying Again In 10 sec\n";
+				echo "Error Encountered Getting Summoners Match History:\n\n " . $e->getMessage() .  "\n\nTrying Again In 10 sec\n";
 				sleep(10);
 				$attempts++;
 				continue;
 			}
-			
+			usleep($waitTime);
 			$attempts = 0;
 			break;
 
@@ -123,10 +127,10 @@ class Mine extends Command
 		for($i = 0; $i < count($matchList); $i++) {
 			
 			//Saving matchId for current match to later retrive stats
-			$matchId = $matchList->match($i)->matchId;
-			
-			//Used to limit number of api requests we send	
-			usleep(2000000);
+			$matchId = $matchList->match($i)->matchId;		
+
+			if(gamestat::where('matchId', $matchId)->count() != 0)
+				continue;
 			
 			echo "Retrieving Match: " . $matchId . "\n";
 
@@ -138,12 +142,12 @@ class Mine extends Command
 				try {
 					$match = $matchApi->match($matchId);
 				} catch (\Exception $e) {
-					echo "Error Encountered Retriving Match Data, Trying Again In 10 sec\n";
+					echo "Error Encountered Retriving Match Data:\n\n" . $e->getMessage() . "\n\nTrying Again In 10 sec\n";
 					sleep(10);
 					$attempts++;
 					continue;
 				}
-			
+				usleep($waitTime);
 				$attempts = 0;
 				break;
 			
@@ -173,24 +177,30 @@ class Mine extends Command
 					$summonerQueue->enqueue($summonerId);			
 				
 				$masteryList = null;
-
+				$updateTable = false;
 				//Getting Mastery Information From Summoner
 				do {
 					try {
-						$masteryList = $championMasteryApi->champions($summonerId);
+						$usedSummoners = UsedSummoners::where('summonerId',$summonerId);
+						if($usedSummoners->count() == 0){
+							$updateTable = true;
+							$masteryList = $championMasteryApi->champions($summonerId);
+							UsedSummoners::create(['summonerId' => $summonerId]);
+						}
 					} catch(\Exception $e) {
-						echo "Encountered Error Getting Mastery Info, Trying Again In 10 sec\n";					
+						echo "Encountered Error Getting Mastery Info:\n\n" . $e->getMessage() . "\n\nTrying Again In 10 sec\n";					
 						sleep(10);
 						$attempts++;
 						continue;
 					}
-
+					
+					usleep($waitTime);
 					$attempts = 0;
 					break;
 
 				} while($attempts < $MAX_ATTEMPTS);								
-			
-				updateChampionMasteryTable($masteryList);	
+				if($updateTable)
+					$this->updateChampionMasteryTable($masteryList);	
 					
 				$lane = $participantTimeline->lane;
 				$role = $participantTimeline->role;
@@ -225,6 +235,11 @@ class Mine extends Command
 								      'role' => $role,
 								      'championId' => $championId,
 								      'champion' => $championName,
+								      'kills' => $kills,
+								      'deaths' => $deaths,
+								      'assists' => $assists,
+								      'creepScore' => $creepScore,
+								      'goldEarned' => $goldEarned,
 								      'doubles' => $doubleKills,
 								      'triples' => $tripleKills,
 								      'quadras' => $quadraKills,
@@ -250,12 +265,12 @@ class Mine extends Command
 				try {
 					$userLeagueData = (array) $leagueApi->league($summonersInMatch, true);
 				} catch(\Exception $e) {
-					echo "Error Encountered Getting Ranked Info, Trying Again In 10 sec\n";
+					echo "Error Encountered Getting Ranked Info:\n\n" . $e->getMessage() ."\n\nTrying Again In 10 sec\n";
 					sleep(10);
 					$attempts++;
 					continue;
 				}
-
+				usleep($waitTime);
 				$attempts = 0;
 				break;
 

@@ -12,13 +12,15 @@ use LeagueWrap\Api;
 |
 */
 
-Route::get('/', array('uses' => 'HomeController@get'));
+Route::resource('summoner.compare', 'SummonerCompareController', ['only' => ['index', 'store']]);
 
-Route::post('/', array('uses' => 'HomeController@post'));
+Route::get('/', function () {
+    return 'asdfn';
+});
 
-Route::get('/test', array('uses' => 'TestController@get'));
-
-
+Route::get('asdf', function () {
+	return 'asdfn';
+});
 
 /*
 |--------------------------------------------------------------------------
